@@ -1,0 +1,15 @@
+streamlit
+selenium
+beautifulsoup4
+webdriver-manager
+requests
+huggingface_hub
+sentence-transformers
+faiss-cpu
+transformers
+slack_bolt
+python-dotenv
+torch
+numpy
+accelerate  # For efficient LLM loading
+bitsandbytes # For 4-bit quantization
