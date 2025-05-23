@@ -29,7 +29,11 @@ PromoSensei is an end-to-end Retrieval-Augmented Generation (RAG) system that sc
 > Watch the full walkthrough of PromoSensei in action:
 
 <!-- 📺 [**Demo Video**](https://drive.google.com/file/d/17qUWjoa3Y_5eKlc6sRdBI7JVALnQoVtw/view?usp=sharing) -->
-PromoSensei_demo.mp4
+
+
+https://github.com/user-attachments/assets/67895deb-6ba4-4003-ac17-3a001a541728
+
+
 > Replace `your-demo-video-id` with your actual demo video path hosted on Google Drive, YouTube, or any public platform.
 
 ---
