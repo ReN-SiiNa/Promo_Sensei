@@ -35,7 +35,7 @@ PromoSensei is an end-to-end Retrieval-Augmented Generation (RAG) system that sc
 https://github.com/user-attachments/assets/67895deb-6ba4-4003-ac17-3a001a541728
 
 
-> Replace `your-demo-video-id` with your actual demo video path hosted on Google Drive, YouTube, or any public platform.
+
 
 ---
 
