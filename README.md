@@ -3,6 +3,8 @@
 PromoSensei is an end-to-end Retrieval-Augmented Generation (RAG) system that scrapes promotions and discounts from e-commerce websites, indexes them using FAISS with semantic vector embeddings, and allows users to query them via natural language using a powerful open-source LLM (`Zephyr-7b-alpha`).
 
 ---
+![Screenshot 2025-05-23 151326](https://github.com/user-attachments/assets/a04bd48b-6e81-4a46-ac55-19a9917546ca)
+![Screenshot 2025-05-23 151231](https://github.com/user-attachments/assets/90baa3ec-7a35-4f77-978c-07eff51e8cd2)
 
 ## 🚀 Features
 
