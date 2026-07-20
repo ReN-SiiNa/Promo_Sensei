@@ -2,7 +2,7 @@
 
 PromoSensei is an AI **agent** that helps shoppers find the best promotional deals across Flipkart, Nykaa, and Puma. Product deals are scraped and embedded into a FAISS index; a Claude-powered agent then answers questions by choosing and chaining its own tools — semantic search, structured filtering, product comparison, aggregate stats, and an on-demand live re-scrape.
 
-It runs locally with **no GPU**: the LLM is the hosted Claude API (`claude-opus-4-8`), and only a small on-device embedding model (`all-MiniLM-L6-v2`) is needed for retrieval.
+It runs locally with **no GPU**: the LLM is the hosted Claude API (default `claude-opus-4-8`, or any model reached through a Portkey gateway), and only a small on-device embedding model (`all-MiniLM-L6-v2`) is needed for retrieval. The UI streams the agent's reasoning and answer token-by-token.
 
 > Originally a single-shot RAG demo (retrieve top-5 → one local Zephyr-7B call → answer), now rebuilt as a tool-using agent.
 
@@ -11,11 +11,11 @@ It runs locally with **no GPU**: the LLM is the hosted Claude API (`claude-opus-
 
 ## 🚀 Features
 
-* 🤖 **Agentic tool use (raw Anthropic SDK)**
-  A hand-written tool-use loop lets Claude decide which tools to call and in what order, looping until it can answer. The Streamlit UI streams the agent's reasoning and each tool call live.
+* 🤖 **Agentic tool use (raw SDK, two backends)**
+  A hand-written tool-use loop lets Claude decide which tools to call and in what order, looping until it can answer. Runs against either the Anthropic Messages API or a Portkey gateway; both stream, so the Streamlit UI shows the agent's reasoning, tool calls, and answer live.
 
 * 🧰 **Five tools over the deal catalog**
-  `search_products` (semantic), `filter_deals` (min discount / price ceiling / brand), `compare_products`, `deal_stats`, and `refresh_deals` (slow live re-scrape).
+  `search_products` (semantic), `filter_deals` (min discount / price ceiling / brand), `compare_products`, `deal_stats`, and `refresh_deals` (slow live re-scrape — one site, or `source="all"` to pull the top few from all three at once).
 
 * 🧠 **Semantic search with FAISS**
   Product metadata embedded with `sentence-transformers` and indexed with FAISS for fast vector similarity retrieval.
@@ -54,13 +54,18 @@ pip install -r requirements.txt
 python -m playwright install chromium   # only needed for scraping / the live refresh tool
 ```
 
-### 2. Add your Anthropic API key
+### 2. Add your API key
 
 ```bash
-cp .env.example .env      # then edit .env and set ANTHROPIC_API_KEY
+cp .env.example .env      # then edit .env
 ```
 
-(Alternatively, run `ant auth login` — the SDK picks up the profile automatically.)
+Two backends, selected by env (see `.env.example`):
+
+* **Direct Anthropic** (default) — set `ANTHROPIC_API_KEY` (or run `ant auth login`; the SDK picks up the profile automatically). Optionally override the model with `ANTHROPIC_MODEL`.
+* **Portkey gateway** — set `PORTKEY_API_KEY` to switch on the gateway path, plus `PORTKEY_MODEL` (your gateway's model slug) and `PORTKEY_GATEWAY_URL`.
+
+Set `PROMO_DEBUG=1` to log the resolved Portkey model + gateway on each turn.
 
 ### 3. Run the agent
 
