@@ -19,18 +19,21 @@ def extract_product_data(html_content):
         "rating": None
     }
     
-    # Extract title first
-    title_element = product_wrapper.find('div', class_='css-xrzmfa')
+    # Extract title first. Nykaa moved the title from a <div> to an <h2> (same
+    # css-xrzmfa class), so match on class regardless of tag, with fallbacks.
+    title_element = (product_wrapper.find(class_='css-xrzmfa')
+                     or product_wrapper.find(['h2', 'h3'], class_=lambda c: bool(c)))
     if title_element:
         full_title = title_element.get_text(strip=True)
         product_data['title'] = full_title
-        
+
         # Extract brand as first word of title
         if full_title:
             product_data['brand'] = full_title.split()[0]  # First word as brand
-    
-    # Extract product link
-    link_element = product_wrapper.find('a', class_='css-qlopj4')
+
+    # Extract product link (any anchor pointing at a product detail page).
+    link_element = (product_wrapper.find('a', class_='css-qlopj4')
+                    or product_wrapper.find('a', href=lambda h: h and '/p/' in h))
     if link_element and 'href' in link_element.attrs:
         product_data['product_link'] = "https://www.nykaa.com" + link_element['href']
     
@@ -77,7 +80,9 @@ def process_nykaa_files(input_folder, output_file):
     
     print(f"Successfully processed {len(all_products)} products. Output saved to {output_file}")
 
-# Usage
-input_folder = 'data/nykaa'
-output_file = 'nykaa_products.json'
-process_nykaa_files(input_folder, output_file)
+# Usage — guarded so importing this module (e.g. for extract_product_data)
+# does not re-parse and overwrite the JSON.
+if __name__ == "__main__":
+    input_folder = 'data/nykaa'
+    output_file = 'nykaa_products.json'
+    process_nykaa_files(input_folder, output_file)

@@ -1,15 +1,24 @@
-streamlit
-selenium
-beautifulsoup4
-webdriver-manager
-requests
-huggingface_hub
+# --- Agent (LLM via hosted Claude API — no local GPU needed) ---
+anthropic
+portkey-ai        # optional: route through a Portkey gateway (set PORTKEY_API_KEY)
+python-dotenv
+
+# --- Retrieval (small embedding model runs locally) ---
 sentence-transformers
 faiss-cpu
-transformers
-slack_bolt
-python-dotenv
-torch
 numpy
-accelerate  # For efficient LLM loading
-bitsandbytes # For 4-bit quantization
+
+# --- UI ---
+streamlit
+
+# --- Scraping / data pipeline (also used by the live refresh_deals tool) ---
+# Playwright manages its own browser binary — after `pip install`, run once:
+#   python -m playwright install chromium
+playwright
+beautifulsoup4
+requests
+
+# NOTE: torch/transformers/accelerate/bitsandbytes are no longer required.
+# The 7B local LLM was replaced by the Claude API, so there is no GPU-bound
+# model to load. sentence-transformers still pulls a small torch build for the
+# MiniLM embedder, but no large-model weights are downloaded.

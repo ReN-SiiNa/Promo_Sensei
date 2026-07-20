@@ -1,27 +1,33 @@
-# PromoSensei – AI-Powered Promotional Offer Assistant
+# PromoSensei – Agentic Promotional Deal Assistant
 
-PromoSensei is an end-to-end Retrieval-Augmented Generation (RAG) system that scrapes promotions and discounts from e-commerce websites, indexes them using FAISS with semantic vector embeddings, and allows users to query them via natural language using a powerful open-source LLM (`Zephyr-7b-alpha`).
+PromoSensei is an AI **agent** that helps shoppers find the best promotional deals across Flipkart, Nykaa, and Puma. Product deals are scraped and embedded into a FAISS index; a Claude-powered agent then answers questions by choosing and chaining its own tools — semantic search, structured filtering, product comparison, aggregate stats, and an on-demand live re-scrape.
+
+It runs locally with **no GPU**: the LLM is the hosted Claude API (`claude-opus-4-8`), and only a small on-device embedding model (`all-MiniLM-L6-v2`) is needed for retrieval.
+
+> Originally a single-shot RAG demo (retrieve top-5 → one local Zephyr-7B call → answer), now rebuilt as a tool-using agent.
 
 ---
 ![Screenshot 2025-05-23 151326](https://github.com/user-attachments/assets/a04bd48b-6e81-4a46-ac55-19a9917546ca)
 
 ## 🚀 Features
 
-* 🕷️ **Web Scraping with Selenium + BeautifulSoup**
-  Dynamically scrapes promotional offers from static & JavaScript-heavy websites.
+* 🤖 **Agentic tool use (raw Anthropic SDK)**
+  A hand-written tool-use loop lets Claude decide which tools to call and in what order, looping until it can answer. The Streamlit UI streams the agent's reasoning and each tool call live.
 
-* 🧠 **Semantic Search with FAISS**
-  Product metadata is embedded using `sentence-transformers` and indexed with FAISS for fast vector similarity retrieval.
+* 🧰 **Five tools over the deal catalog**
+  `search_products` (semantic), `filter_deals` (min discount / price ceiling / brand), `compare_products`, `deal_stats`, and `refresh_deals` (slow live re-scrape).
 
-* 💬 **LLM-Powered Responses**
-  Uses `Zephyr-7b-alpha` (open-source language model from Hugging Face) to generate natural language answers for queries like:
+* 🧠 **Semantic search with FAISS**
+  Product metadata embedded with `sentence-transformers` and indexed with FAISS for fast vector similarity retrieval.
 
-  * “Any flat 50% off deals today?”
-  * “What are the top loyalty cashback offers on Nykaa?”
-  * “Summarize the latest fashion discounts from Adidas”
+* 🖥️ **Local, no-GPU Streamlit UI**
+  Clone and run — no large model weights to download.
 
-* 🖥️ **Streamlit UI (Optional)**
-  Lightweight, interactive front-end to query offers.
+Example questions:
+* "Puma shoes under ₹3000 with at least 40% off"
+* "What's the single biggest discount right now?"
+* "Compare a face serum and a moisturiser deal"
+* "Any fresh Nykaa deals?" (triggers a live scrape)
 
 ---
 
@@ -39,138 +45,83 @@ https://github.com/user-attachments/assets/67895deb-6ba4-4003-ac17-3a001a541728
 
 ---
 
-## 🛠️ Setup Instructions
+## 🛠️ Setup
 
-### ✅ 1. Environment Setup
-
-Install dependencies:
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
+python -m playwright install chromium   # only needed for scraping / the live refresh tool
 ```
 
-> If using Jupyter, use `!pip install ...` in notebook cells.
-
----
-
-### ✅ 2. Run Web Scraper
-
-Start by scraping raw HTML product pages from different e-commerce websites. Run:
+### 2. Add your Anthropic API key
 
 ```bash
-python scraper.py
+cp .env.example .env      # then edit .env and set ANTHROPIC_API_KEY
 ```
 
-This will store the HTML files in structured folders based on the source site:
+(Alternatively, run `ant auth login` — the SDK picks up the profile automatically.)
 
-```
-data/flipkart/
-data/nykaa/
-data/puma/
-```
+### 3. Run the agent
 
-* `flipkart` and `nykaa` use static page scraping.
-* `puma` uses Selenium for dynamic page rendering.
-
----
-
-### ✅ 3. Extract Structured Data
-
-Once HTML files are stored, run the respective collection scripts to parse and convert them into structured JSON metadata:
-
-```bash
-python flipkart_collection.py
-python nykaa_collection.py
-python puma_collection.py
-```
-
-Each script reads HTML files from `data/<website>/` and generates a unified metadata file containing product title, brand, discount, price, and product URL.
-
----
-
-### ✅ 4. Build FAISS Vector Index
-
-Now use the processed JSON data to create a vector database using semantic embeddings.
-
-Run:
-
-```bash
-python faiss_index_builder.py
-```
-
-This uses the `all-MiniLM-L6-v2` embedding model to encode metadata and builds:
-
-```
-product_faiss.index
-product_metadata.json
-```
-
-These files are used for fast vector similarity search in the retrieval pipeline.
-
----
-
-
-### ✅ 5. Launch Streamlit UI
+The repo ships with a prebuilt `product_faiss.index` + `product_metadata.json`, so you can launch straight away:
 
 ```bash
 streamlit run app.py
 ```
-Make sure the following files are present:
-
-* `/product_metadata.json`
-* `/product_faiss.index`
-
-This provides a simple web interface to ask promotional queries like:
-
-```
-What are the top loyalty cashback offers on Nykaa?
-```
 
 ---
 
-### ☁️ Cloud Execution
+## 🔄 Rebuilding the deal catalog (optional)
 
-To run this on cloud GPU (e.g., for faster LLM inference), use the [**PromoSensei Notebook**](/promosensie.ipynb) which is preconfigured for GPU environments.
-
----
-
-## 📦 Dependencies
-
-* `selenium`, `beautifulsoup4`, `requests`
-* `transformers`, `sentence-transformers`, `torch`
-* `faiss-cpu`
-* `streamlit`, `pyngrok`
-
-Install them with:
+Only needed if you want fresh data. The pipeline is a linear set of manual steps:
 
 ```bash
-pip install -r requirements.txt
+python scraper.py            # 1. scrape raw HTML → data/{flipkart,nykaa,puma}/
+python flip_collection.py    # 2. parse each site → <site>_products.json
+python nyka_collection.py
+python puma_collection.py
+python faiss_index_builder.py # 3. embed + build product_faiss.index + product_metadata.json
 ```
+
+* Scraping uses **Playwright** (headless Chromium, self-managed browser — no chromedriver).
+* `flipkart`/`nykaa` paginate via URL; `puma` scroll-loads dynamically.
+* The site selectors are obfuscated CSS classes that change often — if parsing yields empty products, the selectors have gone stale.
+
+---
+
+## 🧱 Architecture
+
+```
+┌─ Data pipeline (offline) ──────────────┐   ┌─ Agent (online) ─────────────────────┐
+│ scraper.py → *_collection.py           │   │ app.py (Streamlit, streams reasoning) │
+│   → faiss_index_builder.py             │   │   → promo_agent.py  (manual tool loop)│
+│   → product_faiss.index + metadata.json│──▶│      → promo_tools.py (schemas+dispatch)│
+└────────────────────────────────────────┘   │         → promo_data.py (search/filter)│
+                                              │         → live_scrape.py (refresh tool)│
+                                              └───────────────────────────────────────┘
+```
+
+* **`promo_data.py`** — pure data layer (no LLM): loads the index, parses the messy `₹`/discount strings, and implements search/filter/compare/stats.
+* **`promo_tools.py`** — Anthropic tool schemas + `run_tool` dispatch.
+* **`promo_agent.py`** — the manual `while stop_reason == "tool_use"` loop over `claude-opus-4-8` with adaptive thinking, yielding events to the UI.
+* **`live_scrape.py`** — bounded live re-scrape behind the `refresh_deals` tool (Playwright, imported lazily).
 
 ---
 
 ## 🤖 Model Info
 
-* **Embedding Model**: `sentence-transformers/all-MiniLM-L6-v2`
-* **LLM**: `HuggingFaceH4/zephyr-7b-alpha` (loaded via Hugging Face)
+* **Agent LLM**: `claude-opus-4-8` via the Anthropic API (adaptive thinking).
+* **Embedding model**: `sentence-transformers/all-MiniLM-L6-v2` (runs locally).
 
-> You can swap Zephyr for smaller open-source models (e.g., TinyLlama, Phi-2) if needed.
-
----
-
-## 📬 Example Query
-
-```text
-User: What are the best fashion offers today?
-→ AI: Here are the latest deals: Adidas is offering 40% off on select shoes, Nykaa has flat 50% cashback on beauty products, and more!
-```
+The original local `HuggingFaceH4/zephyr-7b-alpha` (GPU-bound) has been retired; `torch`/`transformers`/`bitsandbytes` are no longer required.
 
 ---
 
 ## 🔐 Notes
 
-* Hugging Face models like Zephyr may require authentication via token.
-* For demo videos, replace paths like `output/product_metadata.json` and `output/product_faiss.index` with your own test files or static samples.
+* The `refresh_deals` tool uses Playwright's Chromium (install once via `python -m playwright install chromium`); it's slow, so the agent only uses it on explicit request. Live-scraped products are held in memory for the session, not written back to disk.
+* The `promosensie.ipynb` notebook is the legacy GPU/Zephyr (Kaggle/Colab) implementation, kept for reference.
 
 ---
 

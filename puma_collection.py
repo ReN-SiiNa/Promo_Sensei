@@ -19,15 +19,23 @@ def extract_puma_product_data(html_content):
         "tag": None
     }
     
-    # Extract title
-    title_element = product_item.find('h3')
-    if title_element:
-        product_data['title'] = title_element.get_text(strip=True)
-    
-    # Extract product link
+    # Extract product link (also the most reliable title source via aria-label)
     link_element = product_item.find('a', {'data-test-id': 'product-list-item-link'})
     if link_element and 'href' in link_element.attrs:
         product_data['product_link'] = "https://in.puma.com" + link_element['href']
+
+    # Extract title. Puma's markup has shifted over time: older captures used
+    # <h3>, current pages use <h2>. Fall back to the link's aria-label (which
+    # embeds the product name) so this survives the next tag rename.
+    title_element = product_item.find('h3') or product_item.find('h2')
+    if title_element:
+        product_data['title'] = title_element.get_text(strip=True)
+    elif link_element and link_element.get('aria-label'):
+        # aria-label: "2 Colors, <Name>, Discounted Price, ₹.., Regular price, ..."
+        parts = [p.strip() for p in link_element['aria-label'].split(',')]
+        name = next((p for p in parts if p and 'color' not in p.lower()
+                     and 'price' not in p.lower() and '₹' not in p and '%' not in p), None)
+        product_data['title'] = name
     
     # Extract prices
     price_element = product_item.find('span', {'data-test-id': 'sale-price'})
@@ -69,7 +77,9 @@ def process_puma_files(input_folder, output_file):
     
     print(f"Successfully processed {len(all_products)} products. Output saved to {output_file}")
 
-# Usage
-input_folder = 'data/puma'
-output_file = 'puma_products.json'
-process_puma_files(input_folder, output_file)
+# Usage — guarded so importing this module (e.g. for extract_puma_product_data)
+# does not re-parse and overwrite the JSON.
+if __name__ == "__main__":
+    input_folder = 'data/puma'
+    output_file = 'puma_products.json'
+    process_puma_files(input_folder, output_file)

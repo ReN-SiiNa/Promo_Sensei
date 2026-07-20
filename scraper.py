@@ -1,111 +1,113 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
+"""Offline scraper — captures raw per-product HTML fragments for the pipeline.
+
+Scrapes all three sources with one headless Chromium (Playwright) and writes
+the raw outerHTML of each product node into data/<site>/*.html, which the
+*_collection.py parsers then turn into JSON.
+
+Playwright manages its own browser; install it once with:
+    python -m playwright install chromium
+
+Flipkart / Nykaa paginate via URL; Puma scroll-loads and stops after
+MAX_SAME_SCROLLS scrolls yield no new product IDs.
+"""
+
 import os
+import time
 
-# Initialize Chrome WebDriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import sync_playwright
 
-# Correct way: wrap driver path in a Service object
-service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service)
+MAX_PAGES = 20
+SCROLL_PAUSE = 2.0
+MAX_SAME_SCROLLS = 5
 
-# --- Flipkart scraping ---
-query_flipkart = "sale"
-file_flipkart = 0
-os.makedirs("data/flipkart", exist_ok=True)
 
-for i in range(1, 20):
-    url = f"https://www.flipkart.com/search?q={query_flipkart}&sort=relevance&page={i}"
-    print(f"Loading Flipkart page {i}...")
-    driver.get(url)
-
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_all_elements_located((By.XPATH, '//div[@data-id]'))
-        )
-    except Exception as e:
-        print(f"Timeout or error on Flipkart page {i}: {e}")
-        continue
-
-    elems = driver.find_elements(By.XPATH, '//div[@data-id]')
-    print(f"{len(elems)} Flipkart items found on page {i}")
-
-    for elem in elems:
-        html = elem.get_attribute("outerHTML")
-        with open(f"data/flipkart/{query_flipkart}_{file_flipkart}.html", "w", encoding="utf-8") as f:
+def _save_nodes(page, selector, folder, prefix, counter_start=0):
+    """Write outerHTML of every node matching `selector` into folder. Returns
+    the next counter value."""
+    os.makedirs(folder, exist_ok=True)
+    count = counter_start
+    for node in page.query_selector_all(selector):
+        html = node.evaluate("el => el.outerHTML")
+        with open(f"{folder}/{prefix}_{count}.html", "w", encoding="utf-8") as f:
             f.write(html)
-        file_flipkart += 1
+        count += 1
+    return count
 
-# --- Nykaa scraping ---
-query_nykaa = "bestsellers"
-base_url_nykaa = "https://www.nykaa.com/bestsellers/c/15752"
-file_nykaa = 0
-os.makedirs("data/nykaa", exist_ok=True)
 
-for page in range(1, 20):
-    url = f"{base_url_nykaa}?page_no={page}&sort=discount"
-    print(f"Loading Nykaa page {page}...")
-    driver.get(url)
+def scrape_flipkart(page):
+    selector = "div[data-id]"
+    count = 0
+    for i in range(1, MAX_PAGES):
+        url = f"https://www.flipkart.com/search?q=sale&sort=relevance&page={i}"
+        print(f"Loading Flipkart page {i}...")
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        try:
+            page.wait_for_selector(selector, timeout=10000)
+        except Exception as e:
+            print(f"Timeout on Flipkart page {i}: {e}")
+            continue
+        count = _save_nodes(page, selector, "data/flipkart", "sale", count)
+        print(f"  {count} Flipkart items saved so far")
 
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "div#product-list-wrap > div.productWrapper"))
-        )
-    except Exception as e:
-        print(f"Timeout or error on Nykaa page {page}: {e}")
-        continue
 
-    elems = driver.find_elements(By.CSS_SELECTOR, "div#product-list-wrap > div.productWrapper")
-    print(f"{len(elems)} Nykaa products found on page {page}")
+def scrape_nykaa(page):
+    selector = "div#product-list-wrap > div.productWrapper"
+    count = 0
+    for i in range(1, MAX_PAGES):
+        url = f"https://www.nykaa.com/bestsellers/c/15752?page_no={i}&sort=discount"
+        print(f"Loading Nykaa page {i}...")
+        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        try:
+            page.wait_for_selector(selector, timeout=10000)
+        except Exception as e:
+            print(f"Timeout on Nykaa page {i}: {e}")
+            continue
+        count = _save_nodes(page, selector, "data/nykaa", "bestsellers", count)
+        print(f"  {count} Nykaa items saved so far")
 
-    for elem in elems:
-        html = elem.get_attribute("outerHTML")
-        with open(f"data/nykaa/{query_nykaa}_{file_nykaa}.html", "w", encoding="utf-8") as f:
-            f.write(html)
-        file_nykaa += 1
 
-# --- Puma scraping ---
-driver.get("https://in.puma.com/in/en/puma-sale-collection?sort=Discount-high-to-low")
-os.makedirs("data/puma", exist_ok=True)
+def scrape_puma(page):
+    """Scroll-load the Puma sale page, saving each new product node once."""
+    selector = "ul#product-list-items > li[data-test-id='product-list-item']"
+    os.makedirs("data/puma", exist_ok=True)
+    page.goto("https://in.puma.com/in/en/puma-sale-collection?sort=Discount-high-to-low",
+              wait_until="domcontentloaded", timeout=30000)
+    page.wait_for_selector(selector, timeout=15000)
 
-# Scroll & load settings
-scroll_pause_time = 2
-seen_ids = set()
-file_count = 0
-same_count = 0
-max_same_scrolls = 5  # stop if no new products after 5 scrolls
+    seen_ids = set()
+    file_count = 0
+    same_count = 0
+    print("Starting Puma scroll and scrape...")
+    while same_count < MAX_SAME_SCROLLS:
+        page.evaluate("window.scrollBy(0, 1000)")
+        time.sleep(SCROLL_PAUSE)
 
-def scroll_down():
-    driver.execute_script("window.scrollBy(0, 1000);")
+        new_found = 0
+        for node in page.query_selector_all(selector):
+            pid = node.get_attribute("data-product-id")
+            if pid and pid not in seen_ids:
+                seen_ids.add(pid)
+                html = node.evaluate("el => el.outerHTML")
+                with open(f"data/puma/product_{file_count}.html", "w", encoding="utf-8") as f:
+                    f.write(html)
+                file_count += 1
+                new_found += 1
 
-print("Starting scroll and scrape...")
+        same_count = same_count + 1 if new_found == 0 else 0
+        print(f"Products collected: {len(seen_ids)} | this scroll: {new_found}")
 
-while same_count < max_same_scrolls:
-    scroll_down()
-    time.sleep(scroll_pause_time)
 
-    products = driver.find_elements(By.CSS_SELECTOR, "ul#product-list-items > li[data-test-id='product-list-item']")
-    new_found = 0
+def main():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1400, "height": 1000})
+        try:
+            scrape_flipkart(page)
+            scrape_nykaa(page)
+            scrape_puma(page)
+        finally:
+            browser.close()
 
-    for p in products:
-        pid = p.get_attribute("data-product-id")
-        if pid and pid not in seen_ids:
-            seen_ids.add(pid)
-            html = p.get_attribute("outerHTML")
-            with open(f"data/puma/product_{file_count}.html", "w", encoding="utf-8") as f:
-                f.write(html)
-            file_count += 1
-            new_found += 1
 
-    if new_found == 0:
-        same_count += 1
-    else:
-        same_count = 0  # reset if new items found
-
-    print(f"Products collected: {len(seen_ids)} | This scroll: {new_found}")
-
-driver.quit()
+if __name__ == "__main__":
+    main()

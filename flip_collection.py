@@ -5,51 +5,43 @@ import json
 # Folder where your product HTML files are saved
 HTML_FOLDER = "data/flipkart"
 
+def _first_text(soup, selectors):
+    """Return the stripped text of the first selector that matches, else None.
+    Flipkart's obfuscated classes rotate, so each field lists current selectors
+    first with older ones as fallbacks (keeps old data/flipkart/*.html parsing)."""
+    for sel in selectors:
+        node = soup.select_one(sel)
+        if node and node.text.strip():
+            return node.text.strip()
+    return None
+
+
 def parse_product_html(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Extract fields safely (try-except or conditional checks)
-    try:
-        title = soup.select_one("a.WKTcLC").text.strip()
-    except:
-        title = None
+    # Title: the anchor's `title` attr holds the full (untruncated) name.
+    title = None
+    for sel in ("a.atJtCj", "a.WKTcLC"):
+        node = soup.select_one(sel)
+        if node:
+            title = (node.get("title") or node.text).strip() or None
+            if title:
+                break
+
+    brand = _first_text(soup, ["div.Fo1I0b", "div.syl9yP"])
 
     try:
-        brand = soup.select_one("div.syl9yP").text.strip()
-    except:
-        brand = None
-
-    try:
-        product_link = soup.select_one("a.WKTcLC")["href"]
-        # Flipkart links are relative, add base URL
-        product_link = "https://www.flipkart.com" + product_link
+        link_node = soup.select_one("a.CIaYa1") or soup.select_one("a.atJtCj") \
+            or soup.select_one("a.WKTcLC")
+        product_link = "https://www.flipkart.com" + link_node["href"]
     except:
         product_link = None
 
-    try:
-        price = soup.select_one("div.Nx9bqj").text.strip()
-    except:
-        price = None
-
-    try:
-        original_price = soup.select_one("div.yRaY8j").text.strip()
-    except:
-        original_price = None
-
-    try:
-        discount = soup.select_one("div.UkUFwK span").text.strip()
-    except:
-        discount = None
-
-    try:
-        delivery = soup.select_one("div.yiggsN").text.strip()
-    except:
-        delivery = None
-
-    try:
-        tag = soup.select_one("div.O5Fpg8").text.strip()
-    except:
-        tag = None
+    price = _first_text(soup, ["div.hZ3P6w", "div.Nx9bqj"])
+    original_price = _first_text(soup, ["div.kRYCnD", "div.yRaY8j"])
+    discount = _first_text(soup, ["div.HQe8jr span", "div.UkUFwK span"])
+    delivery = _first_text(soup, ["div.yiggsN"])
+    tag = _first_text(soup, ["div.O5Fpg8"])
 
     return {
         "title": title,
