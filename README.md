@@ -35,10 +35,7 @@ Example questions:
 
 > Watch the full walkthrough of PromoSensei in action:
 
-<!-- 📺 [**Demo Video**](https://drive.google.com/file/d/17qUWjoa3Y_5eKlc6sRdBI7JVALnQoVtw/view?usp=sharing) -->
-
-
-https://github.com/user-attachments/assets/67895deb-6ba4-4003-ac17-3a001a541728
+▶️ [**Watch the demo video**](https://github.com/ReN-SiiNa/Promo_Sensei/raw/main/New_PromoSensie%20demo.mp4)
 
 
 
